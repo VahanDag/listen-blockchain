@@ -9,22 +9,22 @@ from web3.middleware import geth_poa_middleware
 webhook_url = "https://updatenftvalues-gtgyvdwnta-uc.a.run.app"
 
 
-# Alchemy ile bağlantı kur
+# connect with Alchemy
 w3 = Web3(Web3.WebsocketProvider(
     'wss://polygon-mumbai.g.alchemy.com/v2/jB5HZcHV7k10Go5aPc-mr5rztjzdXITZ'))
 w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
-# Kontratın ABI ve adresini tanımla
+# get Contract ABI
 with open('./nftabi.json', 'r') as abi_file:
     contract_abi = json.load(abi_file)
 
 contract_address = '0x9D51bBaB56C01e90DbaCCBD99ca97B0CE2155CDf'
-# eski: 0xd96a66344e80aE58Cacb6485df277bE0E7d66374
+# old contract: 0xd96a66344e80aE58Cacb6485df277bE0E7d66374
 
-# Kontratı oluştur
+# create contract
 contract = w3.eth.contract(address=contract_address, abi=contract_abi)
 
-# Event filtrelerini oluştur
+# create event filters
 filter_charged = contract.events.charged.create_filter(fromBlock='latest')
 filter_nftMinted = contract.events.nftMinted.create_filter(fromBlock='latest')
 filter_factorXChanged = contract.events.factorXChanged.create_filter(
@@ -33,21 +33,19 @@ filter_levelUp = contract.events.levelUpEvent.create_filter(fromBlock = 'latest'
 filter_decreaseCharge = contract.events.decreaseChargeEvent.create_filter(fromBlock='latest')
 filter_nftTransfer = contract.events.Transfer.create_filter(fromBlock='latest')
 
-# Eventleri dinle
-
-
+# Listen events
 async def log_loop(event_filter, poll_interval):
     while True:
         for event in event_filter.get_new_entries():
             # print(event)
             if 'charged' in event.event:
-                # charged event'i için bir işlem gerçekleştir
+                # proccess for the charge event
                 user_address = event.args.userAddress
                 token_id = event.args.tokenId
                 charge = event.args.charge
                 print(
                     f'Charged Event - User Address: {user_address}, Token ID: {token_id}, Charge: {charge}')
-                # Veritabanı güncellemesi yapabilirsiniz
+                # update the database
                 charged_data = {
                     "root": [
                         {
@@ -68,8 +66,7 @@ async def log_loop(event_filter, poll_interval):
                     print(
                         f"Firebase function ERROR in charged event: {response_charged.text}")
 
-            elif 'factorXChanged' in event.event:  # factorXChanged event'i için bir işlem gerçekleştir
-                # Özelliklerinizi burada belirtin
+            elif 'factorXChanged' in event.event: 
                 user_address = event.args.userAddress
                 token_id = event.args.tokenId
                 new_factorX = event.args.newFactorX
@@ -77,7 +74,6 @@ async def log_loop(event_filter, poll_interval):
                 print(
                     f'factorXChanged Event - User Address: {user_address}, Token ID: {token_id}, FactorX: {new_factorX} \n')
 
-                # Veritabanı güncellemesi yapabilirsiniz
                 factorX_data = {
                     "root": [
                         {
@@ -99,7 +95,6 @@ async def log_loop(event_filter, poll_interval):
                         f"Firebase function ERROR in factorXChanged event: {response_factorX.text}")
 
             elif "decreaseChargeEvent" in event.event:
-                # Özelliklerinizi burada belirtin
                 user_address = event.args.userAddress
                 token_id = event.args.tokenId
                 new_decreased_charge = event.args.newDecreasedCharge
@@ -107,7 +102,6 @@ async def log_loop(event_filter, poll_interval):
                 print(
                     f'decreaseChargeEvent - User Address: {user_address}, Token ID: {token_id}, Charge: {new_decreased_charge}')
 
-                # Veritabanı güncellemesi yapabilirsiniz
                 decreased_charge_data = {
                     "root": [
                         {
@@ -120,7 +114,7 @@ async def log_loop(event_filter, poll_interval):
                 }
                 response_decreased_charge = requests.post(
                     webhook_url, json=decreased_charge_data)
-                # Yanıtı kontrol et
+                # check the response
                 if response_decreased_charge.status_code == 200:
                     print(
                         "Firebase function triggered successfully for decreaseChargeEvent Event.")
@@ -130,14 +124,13 @@ async def log_loop(event_filter, poll_interval):
             
             elif "Transfer" in event.event:
                 token_id = event.args.tokenId
-                from_user = getattr(event.args, 'from')  # 'from' özelliğine dinamik erişim
+                from_user = getattr(event.args, 'from')  # dynamic access to 'from' properties because of python syntax
                 to_user = event.args.to
                             
                 print(f"tokenid: {token_id} || from: {from_user} || to: {to_user}")
 
 
             elif "levelUpEvent" in event.event:
-                # Özelliklerinizi burada belirtin
                 token_id = event.args.tokenId
                 new_level = event.args.newLevel
 
@@ -168,7 +161,7 @@ async def log_loop(event_filter, poll_interval):
         await asyncio.sleep(poll_interval)
 
 
-# Eventleri dinleme looplarını oluştur
+# create listen to events loops
 loop = asyncio.get_event_loop()
 try:
     tasks = [
